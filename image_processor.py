@@ -17,11 +17,25 @@ class ImageProcessingApp:
         self.root = root
         self.root.title("Приложение для обработки изображений")
 
-        # Фреймы для размещения элементов
-        self.left_frame = tk.Frame(root)
-        self.right_frame = tk.Frame(root)
-        self.left_frame.pack(side=tk.LEFT, padx=10, pady=10)
-        self.right_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+        # Настройка Canvas с прокруткой
+        self.canvas = tk.Canvas(root)
+        self.scrollbar = tk.Scrollbar(root, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+
+        self.scrollable_frame = tk.Frame(self.canvas)
+
+        # Размещаем Canvas и прокрутку
+        self.scrollbar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+
+        self.scrollable_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
+
+        # Фреймы для размещения элементов (внутри прокручиваемого фрейма)
+        self.left_frame = tk.Frame(self.scrollable_frame)
+        self.right_frame = tk.Frame(self.scrollable_frame)
+        self.left_frame.pack(side=tk.LEFT, padx=10, pady=10, expand=True, fill=tk.BOTH)
+        self.right_frame.pack(side=tk.RIGHT, padx=10, pady=10, expand=True, fill=tk.BOTH)
 
         # Виджеты левой стороны
         self.load_left_image_button = tk.Button(self.left_frame, text="Загрузить изображение", command=self.load_left_image_method)
@@ -49,6 +63,10 @@ class ImageProcessingApp:
         self.left_processed_image_label.pack()
         self.left_processed_image_display = tk.Label(self.left_frame)
         self.left_processed_image_display.pack()
+
+        # Добавляем кнопку для сохранения обработанного изображения слева
+        self.save_left_image_button = tk.Button(self.left_frame, text="Сохранить обработанное изображение", command=self.save_left_image)
+        self.save_left_image_button.pack()
 
         # Виджеты правой стороны
         self.load_right_image_button = tk.Button(self.right_frame, text="Загрузить изображение",
@@ -92,9 +110,15 @@ class ImageProcessingApp:
         self.right_processed_image_display = tk.Label(self.right_frame)
         self.right_processed_image_display.pack()
 
+        # Добавляем кнопку для сохранения обработанного изображения справа
+        self.save_right_image_button = tk.Button(self.right_frame, text="Сохранить обработанное изображение", command=self.save_right_image)
+        self.save_right_image_button.pack()
+
         # Изображения
         self.left_image = None
         self.right_image = None
+        self.left_processed_image = None
+        self.right_processed_image = None
 
     def load_left_image_method(self):
         file_path = filedialog.askopenfilename()
@@ -109,7 +133,8 @@ class ImageProcessingApp:
             self.display_image(self.right_image, self.right_image_label)
 
     def display_image(self, image, label):
-        image.thumbnail((250, 250))
+        screen_width, screen_height = self.root.winfo_screenwidth() // 2, self.root.winfo_screenheight() // 2
+        image.thumbnail((screen_width, screen_height))
         photo = ImageTk.PhotoImage(image)
         label.config(image=photo)
         label.image = photo
@@ -120,17 +145,17 @@ class ImageProcessingApp:
             return
         method = self.left_method_var.get()
         if method == "Нелинейный фильтр (статистика порядка)":
-            processed_image = self.apply_order_statistics_filter(self.left_image)
+            self.left_processed_image = self.apply_order_statistics_filter(self.left_image)
         elif method == "Медианный фильтр":
-            processed_image = self.apply_median_filter(self.left_image)
+            self.left_processed_image = self.apply_median_filter(self.left_image)
         elif method == "Максимальный фильтр":
-            processed_image = self.apply_max_filter(self.left_image)
+            self.left_processed_image = self.apply_max_filter(self.left_image)
         elif method == "Минимальный фильтр":
-            processed_image = self.apply_min_filter(self.left_image)
+            self.left_processed_image = self.apply_min_filter(self.left_image)
         else:
             messagebox.showerror("Ошибка", "Неверный метод выбран!")
             return
-        self.display_image(processed_image, self.left_processed_image_display)
+        self.display_image(self.left_processed_image, self.left_processed_image_display)
 
     def process_right_image_method(self):
         if self.right_image is None:
@@ -138,17 +163,17 @@ class ImageProcessingApp:
             return
         method = self.right_method_var.get()
         if method == "Дилатация":
-            processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_DILATE)
+            self.right_processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_DILATE)
         elif method == "Эрозия":
-            processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_ERODE)
+            self.right_processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_ERODE)
         elif method == "Открытие":
-            processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_OPEN)
+            self.right_processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_OPEN)
         elif method == "Закрытие":
-            processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_CLOSE)
+            self.right_processed_image = self.apply_morphological_operation(self.right_image, cv2.MORPH_CLOSE)
         else:
             messagebox.showerror("Ошибка", "Неверный метод выбран!")
             return
-        self.display_image(processed_image, self.right_processed_image_display)
+        self.display_image(self.right_processed_image, self.right_processed_image_display)
 
     def apply_order_statistics_filter(self, image):
         img = np.array(image)
@@ -196,6 +221,20 @@ class ImageProcessingApp:
         img = np.array(image)
         morphed_img = cv2.morphologyEx(img, operation, kernel)
         return Image.fromarray(morphed_img)
+
+    def save_left_image(self):
+        if self.left_processed_image:
+            file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg"), ("All Files", "*.*")])
+            if file_path:
+                self.left_processed_image.save(file_path)
+                messagebox.showinfo("Сохранение", "Изображение успешно сохранено!")
+
+    def save_right_image(self):
+        if self.right_processed_image:
+            file_path = filedialog.asksaveasfilename(defaultextension=".png", filetypes=[("PNG files", "*.png"), ("JPEG files", "*.jpg"), ("All Files", "*.*")])
+            if file_path:
+                self.right_processed_image.save(file_path)
+                messagebox.showinfo("Сохранение", "Изображение успешно сохранено!")
 
 
 if __name__ == "__main__":
